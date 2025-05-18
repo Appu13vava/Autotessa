@@ -12,7 +12,7 @@ from pyrogram import Client, __version__
 from pyrogram.raw.all import layer
 from database.ia_filterdb import Media
 from database.users_chats_db import db
-from info import SESSION, API_ID, API_HASH, BOT_TOKEN, LOG_STR
+from info import SESSION, API_ID, API_HASH, BOT_TOKEN, LOG_STR, LOG_CHANNEL
 from utils import temp
 from typing import Union, Optional, AsyncGenerator
 from pyrogram import types
@@ -62,8 +62,14 @@ class Bot(Client):
         temp.B_NAME = me.first_name
         self.username = '@' + me.username
 
+        # Send LOG_STR to the log channel
+        try:
+            await self.send_message(LOG_CHANNEL, LOG_STR)
+        except Exception as e:
+            print(f"Failed to send startup log to log channel: {e}")
+
         # Add Telegram logging handler
-        telegram_handler = TelegramLogHandler(self, LOG_STR)  # LOG_STR must be your log channel ID (e.g., -1001234567890)
+        telegram_handler = TelegramLogHandler(self, LOG_CHANNEL)
         telegram_handler.setLevel(logging.INFO)
         formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
         telegram_handler.setFormatter(formatter)
