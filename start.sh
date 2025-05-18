@@ -1,23 +1,29 @@
 #!/bin/bash
 
-# Clone repo
-if [ -z "$UPSTREAM_REPO" ]
-then
-  echo "Cloning main Repository"
-  git clone https://github.com/AM-ROBOTS/AutoAnura /AutoAnura
+REPO_URL="https://github.com/AM-ROBOTS/AutoAnura"
+APP_DIR="/AutoAnura"
+LOG_FILE="/app_bot.log"
+
+# Clone repo if not exists or if UPSTREAM_REPO is set
+if [ -z "$UPSTREAM_REPO" ]; then
+  echo "$(date) - Cloning main repository..." | tee -a $LOG_FILE
+  git clone $REPO_URL $APP_DIR
 else
-  echo "Cloning Custom Repo from $UPSTREAM_REPO"
-  git clone $UPSTREAM_REPO /AutoAnura
+  echo "$(date) - Cloning custom repo from $UPSTREAM_REPO..." | tee -a $LOG_FILE
+  git clone $UPSTREAM_REPO $APP_DIR
 fi
 
-cd /AutoAnura
+cd $APP_DIR || exit 1
 
-# Install requirements
+# Install dependencies
+echo "$(date) - Installing dependencies..." | tee -a $LOG_FILE
 pip3 install -U -r requirements.txt
 
-# Start a dummy HTTP server for Koyeb health check (on port 8080)
-python3 -m http.server 8080 &
+# Run bot with restart loop
+while true; do
+  echo "$(date) - Starting bot..." | tee -a $LOG_FILE
+  python3 bot.py >> $LOG_FILE 2>&1
 
-# Start your bot
-echo "Starting Bot...."
-python3 bot.py
+  echo "$(date) - Bot crashed or stopped. Restarting in 5 seconds..." | tee -a $LOG_FILE
+  sleep 5
+done
