@@ -1,7 +1,6 @@
 import logging
 import logging.config
 import asyncio
-
 from pyrogram import Client, __version__
 from pyrogram.raw.all import layer
 from database.ia_filterdb import Media
@@ -13,14 +12,16 @@ from pyrogram import types
 
 
 class TelegramLogHandler(logging.Handler):
-    def __init__(self, client, chat_id):
+    def __init__(self, client, chat_id, loop):
         super().__init__()
         self.client = client
         self.chat_id = chat_id
+        self.loop = loop
 
     def emit(self, record):
         log_entry = self.format(record)
-        asyncio.create_task(self.send_log(log_entry))
+        if self.loop and not self.loop.is_closed():
+            asyncio.run_coroutine_threadsafe(self.send_log(log_entry), self.loop)
 
     async def send_log(self, message):
         try:
@@ -40,12 +41,15 @@ class Bot(Client):
             plugins={"root": "plugins"},
             sleep_threshold=5,
         )
+        self.loop = None
 
     async def start(self):
-        await super().start()
+        if self.loop is None:
+            self.loop = asyncio.get_running_loop()
         b_users, b_chats = await db.get_banned()
         temp.BANNED_USERS = b_users
         temp.BANNED_CHATS = b_chats
+        await super().start()
         await Media.ensure_indexes()
         me = await self.get_me()
         temp.ME = me.id
@@ -56,11 +60,14 @@ class Bot(Client):
         if LOG_CHANNEL and LOG_CHANNEL != 0:
             try:
                 await self.send_message(LOG_CHANNEL, LOG_STR)
-                handler = TelegramLogHandler(self, LOG_CHANNEL)
-                handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
-                logging.getLogger().addHandler(handler)
             except Exception as e:
                 print(f"Failed to send startup log to log channel: {e}")
+
+            telegram_handler = TelegramLogHandler(self, LOG_CHANNEL, self.loop)
+            telegram_handler.setLevel(logging.INFO)
+            formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+            telegram_handler.setFormatter(formatter)
+            logging.getLogger().addHandler(telegram_handler)
         else:
             print("LOG_CHANNEL is not set or zero; skipping Telegram logging setup.")
 
@@ -91,13 +98,19 @@ class Bot(Client):
 if __name__ == "__main__":
     logging.config.fileConfig('logging.conf')
     logging.getLogger().setLevel(logging.INFO)
+    logging.getLogger("pyrogram").setLevel(logging.ERROR)
+    logging.getLogger("imdbpy").setLevel(logging.ERROR)
 
     bot_app = Bot()
 
     async def main():
         await bot_app.start()
-        await idle()
-        await bot_app.stop()
+        try:
+            while True:
+                await asyncio.sleep(10)
+        except (KeyboardInterrupt, SystemExit):
+            pass
+        finally:
+            await bot_app.stop()
 
-    from pyrogram.idle import idle
     asyncio.run(main())
