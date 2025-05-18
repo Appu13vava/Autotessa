@@ -28,7 +28,11 @@ class TelegramLogHandler(logging.Handler):
 
     def emit(self, record):
         log_entry = self.format(record)
-        asyncio.create_task(self.send_log(log_entry))
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.get_event_loop()
+        loop.call_soon_threadsafe(asyncio.create_task, self.send_log(log_entry))
 
     async def send_log(self, message):
         try:
