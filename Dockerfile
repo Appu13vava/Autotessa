@@ -1,12 +1,20 @@
-FROM python:3.10-slim-buster
+FROM python:3.10-slim
 
-RUN apt update && apt upgrade -y
-RUN apt install git -y
-COPY requirements.txt /requirements.txt
+WORKDIR /app
 
-RUN cd /
-RUN pip3 install -U pip && pip3 install -U -r requirements.txt
-RUN mkdir /EvaMaria
-WORKDIR /EvaMaria
-COPY start.sh /start.sh
-CMD ["/bin/bash", "/start.sh"]
+# Install Git and pip
+RUN apt update && apt install -y git && \
+    pip install --upgrade pip
+
+# Copy and install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the rest of your bot code
+COPY . .
+
+# Make start.sh executable
+RUN chmod +x start.sh
+
+# Start the bot
+CMD ["bash", "start.sh"]
