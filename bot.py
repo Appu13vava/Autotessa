@@ -1,5 +1,6 @@
 import logging
 import logging.config
+import asyncio
 
 # Get logging configurations
 logging.config.fileConfig('logging.conf')
@@ -15,6 +16,26 @@ from info import SESSION, API_ID, API_HASH, BOT_TOKEN, LOG_STR
 from utils import temp
 from typing import Union, Optional, AsyncGenerator
 from pyrogram import types
+
+
+class TelegramLogHandler(logging.Handler):
+    def __init__(self, client, chat_id):
+        super().__init__()
+        self.client = client
+        self.chat_id = chat_id
+
+    def emit(self, record):
+        log_entry = self.format(record)
+        # Schedule sending the log message asynchronously
+        asyncio.create_task(self.send_log(log_entry))
+
+    async def send_log(self, message):
+        try:
+            await self.client.send_message(self.chat_id, message)
+        except Exception as e:
+            # Prevent recursive logging errors
+            print(f"Failed to send log message: {e}")
+
 
 class Bot(Client):
 
@@ -40,48 +61,33 @@ class Bot(Client):
         temp.U_NAME = me.username
         temp.B_NAME = me.first_name
         self.username = '@' + me.username
-        logging.info(f"{me.first_name} with for Pyrogram v{__version__} (Layer {layer}) started on {me.username}.")
-        logging.info(LOG_STR)
+
+        # Add Telegram logging handler
+        telegram_handler = TelegramLogHandler(self, LOG_STR)  # LOG_STR must be your log channel ID (e.g., -1001234567890)
+        telegram_handler.setLevel(logging.INFO)
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        telegram_handler.setFormatter(formatter)
+        logging.getLogger().addHandler(telegram_handler)
+
+        logging.info(f"{me.first_name} for Pyrogram v{__version__} (Layer {layer}) started on {me.username}.")
+        logging.info("Telegram logging enabled.")
 
     async def stop(self, *args):
         await super().stop()
         logging.info("Bot stopped. Bye.")
-    
+
     async def iter_messages(
         self,
         chat_id: Union[int, str],
         limit: int,
         offset: int = 0,
     ) -> Optional[AsyncGenerator["types.Message", None]]:
-        """Iterate through a chat sequentially.
-        This convenience method does the same as repeatedly calling :meth:`~pyrogram.Client.get_messages` in a loop, thus saving
-        you from the hassle of setting up boilerplate code. It is useful for getting the whole chat messages with a
-        single call.
-        Parameters:
-            chat_id (``int`` | ``str``):
-                Unique identifier (int) or username (str) of the target chat.
-                For your personal cloud (Saved Messages) you can simply use "me" or "self".
-                For a contact that exists in your Telegram address book you can use his phone number (str).
-                
-            limit (``int``):
-                Identifier of the last message to be returned.
-                
-            offset (``int``, *optional*):
-                Identifier of the first message to be returned.
-                Defaults to 0.
-        Returns:
-            ``Generator``: A generator yielding :obj:`~pyrogram.types.Message` objects.
-        Example:
-            .. code-block:: python
-                for message in app.iter_messages("pyrogram", 1, 15000):
-                    print(message.text)
-        """
         current = offset
         while True:
             new_diff = min(200, limit - current)
             if new_diff <= 0:
                 return
-            messages = await self.get_messages(chat_id, list(range(current, current+new_diff+1)))
+            messages = await self.get_messages(chat_id, list(range(current, current + new_diff + 1)))
             for message in messages:
                 yield message
                 current += 1
