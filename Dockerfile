@@ -2,16 +2,25 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install Git and upgrade pip
-RUN apt update && apt install -y git && \
-    pip install --upgrade pip
+# Install system dependencies
+RUN apt update && apt install -y git gcc && \
+    apt clean && rm -rf /var/lib/apt/lists/*
 
-# Copy and install dependencies
+# Upgrade pip
+RUN pip install --upgrade pip
+
+# Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy your bot code
+# Copy bot code
 COPY . .
 
-# Run the bot directly
+# Expose port for Flask health check
+EXPOSE 8080
+
+# Prevent Python from buffering logs
+ENV PYTHONUNBUFFERED=1
+
+# Run the bot
 CMD ["python", "bot.py"]
