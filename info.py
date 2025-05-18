@@ -66,7 +66,7 @@ LOG_STR += f"Your current IMDB template is {IMDB_TEMPLATE}"
 
 ## EXTRA FEATURES ##
 
-
+USE_SHORTLINK = is_enabled(environ.get("USE_SHORTLINK", "False"), False)
 
      # Auto Delete For Group Message (Self Delete) #
 SELF_DELETE_SECONDS = int(environ.get('SELF_DELETE_SECONDS', 40))
