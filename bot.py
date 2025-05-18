@@ -1,6 +1,8 @@
 import logging
 import logging.config
 import asyncio
+import threading
+from flask import Flask
 
 # Get logging configurations
 logging.config.fileConfig('logging.conf')
@@ -26,19 +28,16 @@ class TelegramLogHandler(logging.Handler):
 
     def emit(self, record):
         log_entry = self.format(record)
-        # Schedule sending the log message asynchronously
         asyncio.create_task(self.send_log(log_entry))
 
     async def send_log(self, message):
         try:
             await self.client.send_message(self.chat_id, message)
         except Exception as e:
-            # Prevent recursive logging errors
             print(f"Failed to send log message: {e}")
 
 
 class Bot(Client):
-
     def __init__(self):
         super().__init__(
             name=SESSION,
@@ -62,13 +61,11 @@ class Bot(Client):
         temp.B_NAME = me.first_name
         self.username = '@' + me.username
 
-        # Send LOG_STR to the log channel
         try:
             await self.send_message(LOG_CHANNEL, LOG_STR)
         except Exception as e:
             print(f"Failed to send startup log to log channel: {e}")
 
-        # Add Telegram logging handler
         telegram_handler = TelegramLogHandler(self, LOG_CHANNEL)
         telegram_handler.setLevel(logging.INFO)
         formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
@@ -99,5 +96,17 @@ class Bot(Client):
                 current += 1
 
 
-app = Bot()
-app.run()
+# --- Flask server to pass Koyeb TCP health check ---
+flask_app = Flask(__name__)
+bot_app = Bot()
+
+@flask_app.route("/")
+def health():
+    return "Bot is running", 200
+
+def run_bot():
+    asyncio.run(bot_app.start())
+
+if __name__ == "__main__":
+    threading.Thread(target=run_bot).start()
+    flask_app.run(host="0.0.0.0", port=8080)
