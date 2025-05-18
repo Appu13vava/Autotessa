@@ -29,7 +29,8 @@ class TelegramLogHandler(logging.Handler):
 
     def emit(self, record):
         log_entry = self.format(record)
-        asyncio.run_coroutine_threadsafe(self.send_log(log_entry), self.loop)
+        if self.loop and not self.loop.is_closed():
+            asyncio.run_coroutine_threadsafe(self.send_log(log_entry), self.loop)
 
     async def send_log(self, message):
         try:
@@ -52,7 +53,8 @@ class Bot(Client):
         self.loop = None
 
     async def start(self):
-        self.loop = asyncio.get_running_loop()  # Save event loop
+        if self.loop is None:
+            self.loop = asyncio.get_running_loop()  # Save event loop once
         b_users, b_chats = await db.get_banned()
         temp.BANNED_USERS = b_users
         temp.BANNED_CHATS = b_chats
@@ -69,7 +71,7 @@ class Bot(Client):
         except Exception as e:
             print(f"Failed to send startup log to log channel: {e}")
 
-        # Attach the updated Telegram log handler
+        # Attach the Telegram log handler
         telegram_handler = TelegramLogHandler(self, LOG_CHANNEL, self.loop)
         telegram_handler.setLevel(logging.INFO)
         formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
@@ -104,13 +106,26 @@ class Bot(Client):
 flask_app = Flask(__name__)
 bot_app = Bot()
 
+
 @flask_app.route("/")
 def health():
     return "Bot is running", 200
 
+
 def run_bot():
-    asyncio.run(bot_app.start())
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    try:
+        loop.run_until_complete(bot_app.start())
+        loop.run_forever()
+    except (KeyboardInterrupt, SystemExit):
+        pass
+    finally:
+        loop.run_until_complete(bot_app.stop())
+        loop.close()
+
 
 if __name__ == "__main__":
-    threading.Thread(target=run_bot).start()
+    threading.Thread(target=run_bot, daemon=True).start()
     flask_app.run(host="0.0.0.0", port=8080)
