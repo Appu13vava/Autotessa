@@ -21,18 +21,15 @@ from pyrogram import types
 
 
 class TelegramLogHandler(logging.Handler):
-    def __init__(self, client, chat_id):
+    def __init__(self, client, chat_id, loop):
         super().__init__()
         self.client = client
         self.chat_id = chat_id
+        self.loop = loop
 
     def emit(self, record):
         log_entry = self.format(record)
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = asyncio.get_event_loop()
-        loop.call_soon_threadsafe(asyncio.create_task, self.send_log(log_entry))
+        asyncio.run_coroutine_threadsafe(self.send_log(log_entry), self.loop)
 
     async def send_log(self, message):
         try:
@@ -52,8 +49,10 @@ class Bot(Client):
             plugins={"root": "plugins"},
             sleep_threshold=5,
         )
+        self.loop = None
 
     async def start(self):
+        self.loop = asyncio.get_running_loop()  # Save event loop
         b_users, b_chats = await db.get_banned()
         temp.BANNED_USERS = b_users
         temp.BANNED_CHATS = b_chats
@@ -70,7 +69,8 @@ class Bot(Client):
         except Exception as e:
             print(f"Failed to send startup log to log channel: {e}")
 
-        telegram_handler = TelegramLogHandler(self, LOG_CHANNEL)
+        # Attach the updated Telegram log handler
+        telegram_handler = TelegramLogHandler(self, LOG_CHANNEL, self.loop)
         telegram_handler.setLevel(logging.INFO)
         formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
         telegram_handler.setFormatter(formatter)
