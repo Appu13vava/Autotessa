@@ -67,7 +67,7 @@ LOG_STR += f"Your current IMDB template is {IMDB_TEMPLATE}"
 ## EXTRA FEATURES ##
 
       # URL Shortener #
-
+USE_SHORTLINK = is_enabled(environ.get("USE_SHORTLINK", "False"), False)
 URL_SHORTENR_WEBSITE = environ.get('')
 URL_SHORTNER_WEBSITE_API = environ.get('URL_SHORTNER_WEBSITE_API', '')
 
