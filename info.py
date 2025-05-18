@@ -68,11 +68,6 @@ LOG_STR += f"Your current IMDB template is {IMDB_TEMPLATE}"
 
       # URL Shortener #
 
-if LOG_CHANNEL:
-    try:
-        await self.send_message(LOG_CHANNEL, LOG_STR)
-    except Exception as e:
-        logging.warning(f"Failed to send startup log to log channel: {e}")
 
      # Auto Delete For Group Message (Self Delete) #
 SELF_DELETE_SECONDS = int(environ.get('SELF_DELETE_SECONDS', 40))
