@@ -81,28 +81,12 @@ class Bot(Client):
     async def iter_messages(
         self,
         chat_id: Union[int, str],
-        limit: int,
-        offset: int = 0,
-    ) -> Optional[AsyncGenerator["types.Message", None]]:
-        current = offset
-        while True:
-            new_diff = min(200, limit - current)
-            if new_diff <= 0:
-                return
-            message_ids = list(range(current, current + new_diff))
-            try:
-                messages = await self.get_messages(chat_id, message_ids)
-                if not isinstance(messages, list):
-                    messages = [messages]
-                for message in messages:
-                    current += 1
-                    if not message:
-                        continue
-                    if message.media:  # Only yield messages with media
-                        yield message
-            except Exception as e:
-                logging.error(f"Error fetching messages: {e}")
-                break
+        limit: Optional[int] = None,
+        offset_id: Optional[int] = 0,
+        reverse: bool = False,
+    ) -> AsyncGenerator[types.Message, None]:
+        async for message in super().iter_messages(chat_id, limit=limit, offset_id=offset_id, reverse=reverse):
+            yield message
 
 
 if __name__ == "__main__":
