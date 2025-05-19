@@ -67,7 +67,7 @@ async def send_for_index(bot, message):
         last_msg_id = int(match.group(5))
         if chat_id.isnumeric():
             chat_id = int("-100" + chat_id)
-    elif message.forward_from_chat.type == enums.ChatType.CHANNEL:
+    elif message.forward_from_chat and message.forward_from_chat.type == enums.ChatType.CHANNEL:
         last_msg_id = message.forward_from_message_id
         chat_id = message.forward_from_chat.username or message.forward_from_chat.id
     else:
@@ -148,7 +148,7 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
             current_msg_id = lst_msg_id
             temp.CANCEL = False
 
-            while True:
+            while current_msg_id > 0:
                 if temp.CANCEL:
                     await msg.edit(
                         f"Cancelled!\n\nSaved: <code>{total_files}</code>\nDuplicates: <code>{duplicate}</code>\n"
@@ -157,19 +157,14 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
                     )
                     break
 
-                messages = await bot.get_messages(
-                    chat_id=chat,
-                    offset_id=current_msg_id,
-                    limit=100,
-                    reverse=False
-                )
+                batch_ids = list(range(current_msg_id, max(current_msg_id - 100, 0), -1))
+                messages = await bot.get_messages(chat_id=chat, message_ids=batch_ids)
 
                 if not messages:
                     break
 
                 for message in messages:
-                    current_msg_id = message.message_id - 1  # paginate backwards
-
+                    current_msg_id = message.message_id - 1
                     if temp.CANCEL:
                         break
 
@@ -179,7 +174,7 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
                     elif not message.media:
                         no_media += 1
                         continue
-                    elif message.media not in [enums.MessageMediaType.VIDEO, enums.MessageMediaType.AUDIO, enums.MessageMediaType.DOCUMENT]:
+                    elif message.media != enums.MessageMediaType.DOCUMENT:
                         unsupported += 1
                         continue
 
