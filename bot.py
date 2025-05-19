@@ -95,9 +95,11 @@ class Bot(Client):
                 if not isinstance(messages, list):
                     messages = [messages]
                 for message in messages:
-                    if message:  # skip None messages
-                        yield message
                     current += 1
+                    if not message:
+                        continue
+                    if message.media:  # Only yield messages with media
+                        yield message
             except Exception as e:
                 logging.error(f"Error fetching messages: {e}")
                 break
