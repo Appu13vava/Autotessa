@@ -89,10 +89,18 @@ class Bot(Client):
             new_diff = min(200, limit - current)
             if new_diff <= 0:
                 return
-            messages = await self.get_messages(chat_id, list(range(current, current + new_diff + 1)))
-            for message in messages:
-                yield message
-                current += 1
+            message_ids = list(range(current, current + new_diff))
+            try:
+                messages = await self.get_messages(chat_id, message_ids)
+                if not isinstance(messages, list):
+                    messages = [messages]
+                for message in messages:
+                    if message:  # skip None messages
+                        yield message
+                    current += 1
+            except Exception as e:
+                logging.error(f"Error fetching messages: {e}")
+                break
 
 
 if __name__ == "__main__":
