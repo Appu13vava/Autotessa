@@ -145,52 +145,74 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
 
     async with lock:
         try:
-            current = temp.CURRENT
+            current_msg_id = lst_msg_id
             temp.CANCEL = False
 
-            async for message in bot.iter_messages(chat_id=chat, limit=lst_msg_id, offset=temp.CURRENT):
+            while True:
                 if temp.CANCEL:
-                    await msg.edit(f"Cancelled!\n\nSaved: <code>{total_files}</code>\nDuplicates: <code>{duplicate}</code>\nDeleted: <code>{deleted}</code>\nNo Media: <code>{no_media + unsupported}</code> (Unsupported: <code>{unsupported}</code>)\nErrors: <code>{errors}</code>")
+                    await msg.edit(
+                        f"Cancelled!\n\nSaved: <code>{total_files}</code>\nDuplicates: <code>{duplicate}</code>\n"
+                        f"Deleted: <code>{deleted}</code>\nNo Media: <code>{no_media + unsupported}</code> "
+                        f"(Unsupported: <code>{unsupported}</code>)\nErrors: <code>{errors}</code>"
+                    )
                     break
 
-                current += 1
+                messages = await bot.get_messages(
+                    chat_id=chat,
+                    offset_id=current_msg_id,
+                    limit=100,
+                    reverse=False
+                )
 
-                if current % 20 == 0:
+                if not messages:
+                    break
+
+                for message in messages:
+                    current_msg_id = message.message_id - 1  # paginate backwards
+
+                    if temp.CANCEL:
+                        break
+
+                    if message.empty:
+                        deleted += 1
+                        continue
+                    elif not message.media:
+                        no_media += 1
+                        continue
+                    elif message.media not in [enums.MessageMediaType.VIDEO, enums.MessageMediaType.AUDIO, enums.MessageMediaType.DOCUMENT]:
+                        unsupported += 1
+                        continue
+
+                    media = getattr(message, message.media.value, None)
+                    if not media:
+                        unsupported += 1
+                        continue
+
+                    media.file_type = message.media.value
+                    media.caption = message.caption
+
+                    saved, status = await save_file(media)
+                    if saved:
+                        total_files += 1
+                    elif status == 0:
+                        duplicate += 1
+                    elif status == 2:
+                        errors += 1
+
+                processed = total_files + duplicate + errors + deleted + no_media + unsupported
+                if processed % 20 == 0:
                     await msg.edit_text(
-                        f"Fetched: <code>{current}</code>\nSaved: <code>{total_files}</code>\nDuplicates: <code>{duplicate}</code>\nDeleted: <code>{deleted}</code>\nNo Media: <code>{no_media + unsupported}</code> (Unsupported: <code>{unsupported}</code>)\nErrors: <code>{errors}</code>",
+                        f"Processed: <code>{processed}</code>\nSaved: <code>{total_files}</code>\nDuplicates: <code>{duplicate}</code>\n"
+                        f"Deleted: <code>{deleted}</code>\nNo Media: <code>{no_media + unsupported}</code> (Unsupported: <code>{unsupported}</code>)\n"
+                        f"Errors: <code>{errors}</code>",
                         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('Cancel', callback_data='index_cancel')]])
                     )
-
-                if message.empty:
-                    deleted += 1
-                    continue
-                elif not message.media:
-                    no_media += 1
-                    continue
-                elif message.media not in [enums.MessageMediaType.VIDEO, enums.MessageMediaType.AUDIO, enums.MessageMediaType.DOCUMENT]:
-                    unsupported += 1
-                    continue
-
-                media = getattr(message, message.media.value, None)
-                if not media:
-                    unsupported += 1
-                    continue
-
-                media.file_type = message.media.value
-                media.caption = message.caption
-
-                saved, status = await save_file(media)
-                if saved:
-                    total_files += 1
-                elif status == 0:
-                    duplicate += 1
-                elif status == 2:
-                    errors += 1
 
         except Exception as e:
             logger.exception(e)
             await msg.edit(f'Error: {e}')
         else:
             await msg.edit(
-                f'Successfully indexed!\n\nSaved: <code>{total_files}</code>\nDuplicates: <code>{duplicate}</code>\nDeleted: <code>{deleted}</code>\nNo Media: <code>{no_media + unsupported}</code> (Unsupported: <code>{unsupported}</code>)\nErrors: <code>{errors}</code>'
+                f'Successfully indexed!\n\nSaved: <code>{total_files}</code>\nDuplicates: <code>{duplicate}</code>\n'
+                f'Deleted: <code>{deleted}</code>\nNo Media: <code>{no_media + unsupported}</code> (Unsupported: <code>{unsupported}</code>)\nErrors: <code>{errors}</code>'
             )
